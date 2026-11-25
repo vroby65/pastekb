@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Wait for the shortcut to be released before xdotool can save its modifiers.
+keyboards=$(LC_ALL=C xinput list --short |
+    sed -nE 's/.*id=([0-9]+)[[:space:]]+\[slave[[:space:]]+keyboard.*$/\1/p')
+deadline=$((SECONDS + 2))
+while :; do
+    pressed=
+    while read -r keyboard; do
+        [[ -n $keyboard ]] || break
+        state=$(LC_ALL=C xinput query-state "$keyboard")
+        if [[ $state =~ key\[[0-9]+\]=down ]]; then
+            pressed=1
+            break
+        fi
+    done <<< "$keyboards"
+    [[ $pressed ]] || break
+    if (( SECONDS >= deadline )); then
+        printf '%s\n' 'pastekb: timed out waiting for key release' >&2
+        exit 1
+    fi
+    sleep 0.03
+done
+
+xclip -selection clipboard -out | xdotool type --clearmodifiers --file -
